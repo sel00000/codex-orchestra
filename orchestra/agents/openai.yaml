@@ -1,0 +1,6 @@
+interface:
+  display_name: "Orchestra"
+  short_description: "작업별 모델·추론 강도를 자동 배정하고 검토·정리를 관리하는 스킬"
+  default_prompt: "$orchestra 5 이 작업을 필요한 역할로 나누고, 모델과 추론 강도를 자동 배정해 수행해줘."
+policy:
+  allow_implicit_invocation: false
