@@ -1,55 +1,50 @@
-그냥 한번 써보세요. 길게 설명하는 것보다 직접 써보셨으면 합니다.
-Codex에서 여러 에이전트의 작업을 지휘하는 Orchestra를 소개합니다.
+**English** | [한국어](README.ko.md)
 
-핵심은 단순히 작업을 나눠 맡기는 데서 끝나지 않는다는 점입니다. 총괄 모델이 각 하위 작업에 맞춰 사용할 모델과 추론 강도(reasoning effort)까지 직접 선택합니다.
+Give Orchestra a try. I'd like you to see how it works for yourself.
 
-단순한 작업에는 가벼운 설정을, 복잡한 구현이나 중요한 검토에는 더 높은 설정을 배정하는 방식입니다. 추론 강도는 총괄에 설정한 상한 안에서 조절됩니다. 
-모든 작업에 같은 수준의 추론 자원을 쓰는 대신, 필요한 곳에 더 집중하도록 한 것입니다.
+Orchestra coordinates multiple agents in Codex. The lead model chooses both the model and reasoning effort for each subtask.
 
-목표는 분명합니다. 결과물의 품질은 유지하면서, 불필요한 토큰 소비는 줄이는 것.
+It assigns lighter settings to straightforward tasks and higher settings to complex implementation or important reviews, always within the leader's reasoning effort cap. This directs more reasoning effort toward the work that needs it.
 
-작업에 따라 모델과 추론 강도를 조절하는 만큼, 토큰 사용을 줄이는 데 도움이 될 것으로 기대합니다.
-써보시고 마음에 드셨다면 **GitHub Star ⭐**도 부탁드립니다.
+The goal is to maintain output quality while reducing unnecessary token use. Adjusting the model and reasoning effort to each task is expected to help reduce token use.
 
-별 하나가 큰 응원이 됩니다.
-
-
+If you try it and find it useful, please leave a **GitHub Star ⭐**. Every star is encouraging.
 
 # Orchestra for Codex
 
-Orchestra는 작업에 맞춰 에이전트 팀을 구성하는 Codex 스킬입니다. 하위 작업마다 모델과 추론 강도를 자동으로 선택합니다.
+Orchestra is a Codex skill that builds an agent team for the task at hand. It automatically selects a model and reasoning effort for each subtask.
 
-Ubuntu WSL의 Codex 내장 에이전트 도구로 작업을 나누고 결과를 검토·보고합니다. 배정 검사와 작업 기록에는 Python 표준 라이브러리로 만든 보조 도구를 사용합니다.
+It uses Codex's native agent tools in Ubuntu WSL to delegate work, review results, and report back. Helper scripts built with the Python standard library check assignments and keep task records.
 
 ```text
-$orchestra 5 이 프로젝트의 오류를 조사하고 수정한 뒤 결과를 검토해줘.
+$orchestra 5 Investigate and fix the errors in this project, then review the results.
 ```
 
-사용자가 선택한 총괄 모델과 추론 강도는 그대로 유지합니다. 총괄은 각 하위 작업의 성격에 맞춰 모델과 추론 강도를 선택하고 결과를 검토해 통합합니다. 별도 상주 서비스나 모델 API 키는 필요하지 않으며 OMC·OMX에도 의존하지 않습니다.
+The leader keeps the model and reasoning effort you selected. It chooses settings for each child task, reviews the results, and combines them into the final output. No separate background service or model API key is required, and Orchestra does not depend on OMC or OMX.
 
-## 핵심 동작
+## How it works
 
-- 숫자는 총괄을 제외하고 동시에 실행할 하위 에이전트 수의 상한입니다. 5~20명 사이에서 지정하며 생략하면 5입니다. 자문역·검토자도 이 수에 포함하고 필요한 인원만 사용합니다.
-- 하위 작업을 배정할 때는 명확성, 복잡성, 오류의 영향, 검증 가능성, 도구·자료 준비 상태를 함께 살핍니다.
-- 자문역에는 총괄보다 강한 모델도 선택할 수 있습니다. 다만 하위 작업의 추론 강도는 총괄의 설정을 넘지 않습니다.
-- 작업의 의존성과 쓰기 범위, 재시도를 관리합니다. 요청한 설정과 실제 관측값은 구분해 기록합니다.
-- `$orchestra`로 요청했을 때 사용합니다. 간단한 작업에는 불필요한 팀을 만들지 않습니다.
+- The number sets the maximum number of child agents that can run at once, excluding the leader. Choose 5 to 20; the default is 5. Advisors and reviewers count toward this limit, and Orchestra uses only as many agents as the work needs.
+- For each assignment, the leader considers clarity, complexity, the consequences of errors, verifiability, and whether the necessary tools and source material are available.
+- An advisor can use a stronger model than the leader. A child's reasoning effort must stay at or below the leader's setting.
+- Orchestra tracks task dependencies, write boundaries, and retries. It records requested settings separately from values actually observed during execution.
+- Invoke it with `$orchestra`. It does not create an unnecessary team for a simple task.
 
-| 하위 작업 예시 | 기본 선택 기준 |
+| Example subtask | Starting choice |
 |---|---|
-| 단순 추출, 파일 목록, 명확한 작은 수정 | 사용 가능한 Luna / Low 또는 Medium |
-| 일반 구현, 여러 단계의 분석 | 사용 가능한 Sol / Medium 또는 High |
-| 중요한 설계 판단, 어려운 결과 검토 | 사용 가능한 Astra / High, 총괄의 강도 상한 안에서 |
+| Simple extraction, file listings, clearly defined small changes | An available Luna / Low or Medium |
+| General implementation, analysis with several steps | An available Sol / Medium or High |
+| Important design decisions, difficult result reviews | An available Astra / High, within the leader's effort cap |
 
-예를 들어 총괄이 Sol / High라면 Luna / Low 작업자, Sol / Medium 구현자, Astra / High 자문역을 조합할 수 있습니다. 총괄이 Astra / Low라면 모든 하위 작업도 Low 범위에서 배정합니다.
+For example, a Sol / High leader can combine a Luna / Low worker, a Sol / Medium implementer, and an Astra / High advisor. With an Astra / Low leader, every child task must also use Low.
 
-표에 나온 모델은 이 스킬이 배정할 때 참고하는 후보입니다. 사용할 수 있는 모델은 계정과 Codex 환경에 따라 달라집니다. 현재 모델 목록과 실제 에이전트 생성 도구가 모두 허용하는 조합만 사용합니다. 자세한 기준은 [모델 선택 정책](orchestra/references/routing.md)에 있습니다.
+The models in the table are candidates for assignment. Availability depends on your account and Codex environment. Orchestra uses only combinations allowed by both the current model catalog and the actual agent creation tool. See the [model selection policy](orchestra/references/routing.md) for details.
 
-## 설치
+## Installation
 
-Ubuntu WSL에서 사용하며 Python 3.11 이상이 필요합니다. Codex의 에이전트 생성 도구가 하위 에이전트별로 모델·추론 강도를 지정할 수 있어야 합니다. 최초 검증 환경은 Codex CLI 0.157.1 / Python 3.12.3입니다. 다른 버전과 도구 환경에서는 [호환성 안내](orchestra/references/native-compatibility.md)를 먼저 확인하세요.
+Use Ubuntu WSL with Python 3.11 or later. Codex's agent creation tool must support setting the model and reasoning effort for each child agent. Initial validation used Codex CLI 0.157.1 / Python 3.12.3. For other versions or tool environments, check the [compatibility guide](orchestra/references/native-compatibility.md) first.
 
-WSL 터미널에서 실행합니다.
+Run these commands in your WSL terminal:
 
 ```bash
 git clone https://github.com/sel00000/codex-orchestra.git
@@ -57,53 +52,53 @@ cd codex-orchestra
 python3 tools/install_orchestra.py
 ```
 
-설치 위치는 `~/.agents/skills/orchestra/`입니다. 같은 이름의 스킬이 있으면 기존 폴더 옆에 백업을 보존한 뒤 설치합니다. 기존 Codex 설정이나 다른 스킬은 수정하지 않습니다. 열린 세션에 새 스킬이 표시되지 않으면 새 Codex 세션에서 호출하세요.
+The installer places the skill in `~/.agents/skills/orchestra/`. If a skill with the same name already exists, it saves a backup beside the existing folder before installing. It leaves your Codex configuration and other skills unchanged. If the new skill does not appear in an open session, invoke it in a new Codex session.
 
-ZIP만 만들려면 다음을 실행합니다.
+To create a ZIP without installing:
 
 ```bash
 python3 tools/install_orchestra.py --zip dist/orchestra.zip
 ```
 
-ZIP에는 스킬의 10개 파일만 포함합니다. 테스트, 로컬 실행 DB, 캐시는 포함하지 않습니다.
+The ZIP contains only the skill's 10 files. Tests, local run databases, and caches are excluded.
 
-## 사용 예시
+## Usage examples
 
 ```text
-$orchestra 이 코드의 오류 원인을 찾고 수정 결과를 확인해줘.
-$orchestra 8 이 CAD 자료의 파일 관계와 검토가 필요한 부분을 정리해줘.
-$orchestra 10 이 연구 자료들의 근거를 대조하고 실험 계획 초안을 만들어줘.
+$orchestra Find the cause of the error in this code and verify the fix.
+$orchestra 8 Map the relationships between these CAD files and identify what needs review.
+$orchestra 10 Cross-check the evidence in these research materials and draft an experimental plan.
 ```
 
-요청한 인원이 현재 세션의 실제 에이전트 한도보다 많으면 필요한 실행 조건을 안내합니다. 스킬의 숫자 설정만으로 Codex 자체의 한도가 늘어나지는 않습니다. 새 세션을 준비하는 방법은 [사용 안내](docs/usage.ko.md)를 참고하세요.
+If the requested team limit exceeds the current session's actual agent capacity, Orchestra explains the setup needed. The number in the skill invocation does not increase Codex's own limit. See the [usage guide (Korean)](docs/usage.ko.md) for instructions on preparing a new session.
 
-## 검증과 현재 한계
+## Validation and current limitations
 
-정책·상태·명령·패키징을 확인하는 로컬 테스트 **58개**를 통과했습니다. 설치된 스킬로 네이티브 하위 작업 두 건을 생성해 코드 수정과 자료 검토 결과도 확인했습니다.
+The **58 local tests** covering policy, state, commands, and packaging passed. The installed skill also created two native child tasks whose code fix and source review results were checked.
 
-- **실제 5명·20명 동시 실행은 아직 검증하지 않았습니다.** 로컬 기록의 5/20 예약 경계 시험은 실제 동시 실행 시험과 별개입니다.
-- 생성 도구에서 최종 유효 모델·추론 강도를 확인할 수 없으면 실제값을 `unverified`로 남깁니다.
-- 이 스킬은 운영 규칙과 로컬 검사로 하위 작업을 관리합니다. Codex 런타임 전체의 강제 차단이나 악의적인 호출자 인증을 제공하지 않습니다.
-- 산출물이 완성되어도 도구에서 에이전트 종료를 확인할 수 없으면 `CLEANUP_REQUIRED`를 보고합니다.
-- CAD 파일 목록 정리는 실제 CAD 편집·물리 검증이 아니며 자료 요약은 논문 원문 검증이나 실험 결과와 구분합니다.
+- **Actual concurrent runs with 5 or 20 agents have not been verified.** Local reservation boundary tests for 5/20 slots are separate from tests of real agents running at the same time.
+- If the creation tool does not expose the final effective model and reasoning effort, the actual values remain `unverified`.
+- The skill manages child tasks through workflow rules and local checks. It does not enforce restrictions across the entire Codex runtime or authenticate hostile callers.
+- Even when the output is complete, Orchestra reports `CLEANUP_REQUIRED` if the tools cannot confirm that the agents have terminated.
+- Organizing CAD file listings does not establish that CAD editing or physical validation occurred. Summaries of research material are kept distinct from verification against full papers or experimental results.
 
-재현 가능한 로컬 시험과 실제 모델 시험의 범위는 [검증 기록](docs/validation.md)에 정리했습니다.
+The [validation record (Korean)](docs/validation.md) describes the scope of the reproducible local tests and the actual model runs.
 
-## 개발·테스트
+## Development and testing
 
-추가 Python 패키지 설치 없이 WSL/Linux에서 실행합니다. 이 시험은 실제 모델을 호출하지 않습니다.
+Run the tests on WSL/Linux without installing additional Python packages. These tests do not call models.
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-| 경로 | 내용 |
+| Path | Contents |
 |---|---|
-| [orchestra/SKILL.md](orchestra/SKILL.md) | Codex가 읽는 스킬 진입점 |
-| `orchestra/references/` | 모델 선택, 작업 절차, 호환성, 보조 명령 |
-| `orchestra/scripts/` | 정책 검사, 원자적 예약, 상태 기록, 보고 |
-| `tools/install_orchestra.py` | 백업 설치 및 ZIP 생성 |
-| `tests/` | 모델 호출 없는 회귀 시험 |
-| `docs/` | 한국어 사용 안내와 검증 범위 |
+| [orchestra/SKILL.md](orchestra/SKILL.md) | Skill entry point read by Codex |
+| `orchestra/references/` | Model selection, workflow, compatibility, and helper commands |
+| `orchestra/scripts/` | Policy checks, atomic reservations, state records, and reporting |
+| `tools/install_orchestra.py` | Installation with backups and ZIP creation |
+| `tests/` | Regression tests without model calls |
+| `docs/` | Korean usage guide and validation scope |
 
-Orchestra는 사용하는 프로젝트의 `.orchestra/<run-id>/`에 작업 기록을 보존합니다. 이 저장소에는 개인 실행 기록을 포함하지 않습니다.
+Orchestra keeps task records in `.orchestra/<run-id>/` inside the project where it runs. This repository does not include personal run records.
