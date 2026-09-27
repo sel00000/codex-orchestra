@@ -1,0 +1,26 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Private run records and local configuration
+.orchestra/
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.log
+.env
+.env.*
+
+# Generated packages and installation backups
+dist/
+*.zip
+orchestra.backup-*/
+.DS_Store
+Thumbs.db
