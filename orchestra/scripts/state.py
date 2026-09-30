@@ -158,14 +158,22 @@ class RunStore:
             connection.execute("UPDATE runs SET data=? WHERE id=?", (encode(run), run_id))
             self.event(connection, run_id, "selection_changed", snapshot)
 
+    def update_catalog(self, run_id, catalog, details):
+        """Update future assignments while preserving existing agents and results."""
+        if not isinstance(catalog, dict) or not isinstance(details, dict):
+            raise ValueError("CATALOG_REQUIRED")
+        with self.transaction() as connection:
+            run, _ = self.get_run(connection, run_id)
+            previous = run.get("catalog_id")
+            run.update(details)
+            run["catalog"] = catalog
+            connection.execute("UPDATE runs SET data=? WHERE id=?", (encode(run), run_id))
+            if previous != run.get("catalog_id"):
+                self.event(connection, run_id, "catalog_changed", {"previous": previous, **details, "catalog": catalog})
+
     def reserve(self, run_id, task_id, attempt, request):
         with self.transaction() as connection:
             run, problem = self.get_run(connection, run_id)
-            if problem:
-                raise ValueError(problem)
-            errors = validate_dispatch(request, run["snapshot"], run["catalog"])
-            if errors:
-                raise ValueError(",".join(errors))
             if (request["run_id"], request["task_id"], request["attempt"]) != (run_id, task_id, attempt):
                 raise ValueError("REQUEST_ID_MISMATCH")
             previous = connection.execute("SELECT * FROM agents WHERE run_id=? AND task_id=? AND attempt=?", (run_id, task_id, attempt)).fetchone()
@@ -173,6 +181,11 @@ class RunStore:
                 if json.loads(previous["request"]) != request:
                     raise ValueError("DISPATCH_CONFLICT")
                 return {"reservation_id": previous["id"], "state": previous["state"], "agent_id": previous["agent_id"], "action": "wait_existing"}
+            if problem:
+                raise ValueError(problem)
+            errors = validate_dispatch(request, run["snapshot"], run["catalog"], run.get("catalog_id"))
+            if errors:
+                raise ValueError(",".join(errors))
             task = self.get_task(connection, run_id, task_id)
             if task["state"] not in ("READY", "REWORK"):
                 raise ValueError("TASK_NOT_READY")

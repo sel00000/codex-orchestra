@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "orchestra/scripts/native.py"
+sys.path.insert(0, str(SCRIPT.parent))
 
 
 def snapshot():

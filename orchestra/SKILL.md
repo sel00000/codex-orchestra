@@ -14,7 +14,7 @@ This is a skill using the host's native agent tools. Its Python helpers validate
 
 1. Preserve the chosen leader model and reasoning. Obtain the current selection and native capacity from exposed runtime information or an explicit user confirmation already in this conversation. Do not substitute config defaults, model self-identification, or an old session's settings. If missing, ask once for only the missing values while doing independent preparation.
 2. Read [native-compatibility.md](references/native-compatibility.md) for the current host's tools, setup, capacity and lifecycle limits. A native cap below the user's requested cap is a setup mismatch; explain it rather than silently lowering the request. A missing per-child model/effort override means automatic model routing is unavailable on that tool surface.
-3. Use `scripts/orchestra.py inspect` to obtain available model metadata. Intersect it with models and efforts accepted by the **current native tool schema**. Do not select a model merely because it is listed in a catalog. Restrict efforts to `low < medium < high < xhigh < max`; use only the seven user-approved candidates in [routing.md](references/routing.md).
+3. Use `scripts/orchestra.py inspect` with `native_catalog` from the **current native spawn tool schema**. The helper refreshes Codex's catalog, reads supported efforts and retirement metadata, and intersects both sources. New GPT model versions become candidates automatically; absent, hidden or retired models are excluded. Restrict efforts to `low < medium < high < xhigh < max`. Read [routing.md](references/routing.md) for family choices and unfamiliar models. Catalog refresh requests do not prove model service availability or runtime compatibility.
 4. Make a small dependency graph with concrete outputs, acceptance checks, write ownership and a deadline for each assignment. Use only as many children as useful. Keep final integration and user communication with the leader. For a trivial task, complete it directly rather than fabricating five jobs; explain that no team was needed.
 
 ## Choose models automatically
@@ -28,6 +28,12 @@ Read [routing.md](references/routing.md). Assess clarity, complexity, consequenc
 - Use `fork_turns="none"` (or the native equivalent for a fresh task) when specifying overrides, and supply a compact task packet. Full-history forks can forbid overrides. Follow the actual tool's contract.
 
 Record one concrete reason for each assignment. These are starting policies, not measured price/performance guarantees. Model escalation needs a failure diagnosis or task reason; it must not lower the acceptance standard.
+
+## Follow model and skill updates
+
+At each invocation, `inspect` also checks the repository's release number with a short, read-only request. If `skill_update.status` is `update_available`, tell the user the installed/latest versions and link the repository; continue the task with supported capabilities. `unverified` means the update check could not be completed. This check runs when the skill is invoked, without a scheduled background watcher. Skill code updates are notification-only.
+
+Pass the current `native_catalog` to `init`. Before each new `check` or `reserve`, the helper refreshes the catalog automatically. Include the returned `catalog_id` in requests. On `CATALOG_STALE`, prepare a new assignment against the refreshed candidates. If the tool schema changes, supply its new `native_catalog`; for an older run, use `sync-models` to enable refresh. Keep the user's leader selection and existing reservations/results. A retirement only changes future assignments; it does not confirm that an existing child stopped. If native creation rejects a listed model, refresh and diagnose before choosing another candidate.
 
 ## Record before dispatch
 

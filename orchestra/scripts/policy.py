@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 
-from native import EFFORTS, MODELS
+from catalog import EFFORTS, model_name
 
 
 def text(value):
@@ -24,7 +24,7 @@ def validate_selection(value):
     for key in ("session_id", "selection_id", "selection_evidence", "native_cap_evidence"):
         if not text(value.get(key)):
             errors.append(key.upper() + "_REQUIRED")
-    if value.get("model") not in MODELS or value.get("effort") not in EFFORTS:
+    if not model_name(value.get("model")) or value.get("effort") not in EFFORTS:
         errors.append("LEADER_SELECTION_INVALID")
     if value.get("selection_source") not in ("runtime_observed", "user_confirmed"):
         errors.append("SELECTION_UNCONFIRMED")
@@ -35,7 +35,7 @@ def validate_selection(value):
     return errors
 
 
-def validate_dispatch(request, snapshot, catalog):
+def validate_dispatch(request, snapshot, catalog, catalog_id=None):
     errors = validate_selection(snapshot)
     if not isinstance(request, dict):
         return errors + ["REQUEST_REQUIRED"]
@@ -46,8 +46,10 @@ def validate_dispatch(request, snapshot, catalog):
             errors.append(key.upper() + "_REQUIRED")
     if request.get("selection_id") != snapshot["selection_id"]:
         errors.append("SELECTION_STALE")
+    if catalog_id is not None and request.get("catalog_id") != catalog_id:
+        errors.append("CATALOG_STALE")
     model, effort = request.get("model"), request.get("effort")
-    if not isinstance(catalog, dict) or not text(model) or model not in MODELS or model not in catalog:
+    if not isinstance(catalog, dict) or not model_name(model) or model not in catalog:
         errors.append("MODEL_UNAVAILABLE")
     elif not isinstance(catalog[model], list) or effort not in catalog[model]:
         errors.append("EFFORT_UNSUPPORTED")

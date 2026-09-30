@@ -10,6 +10,7 @@ FILES = (
     "SKILL.md", "agents/openai.yaml", "scripts/native.py", "scripts/policy.py",
     "scripts/state.py", "scripts/orchestra.py", "references/routing.md",
     "references/workflow.md", "references/commands.md", "references/native-compatibility.md",
+    "scripts/catalog.py", "scripts/update_check.py", "release.json",
 )
 
 

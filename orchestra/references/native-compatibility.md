@@ -2,6 +2,8 @@
 
 Characterized target: Ubuntu WSL, Codex CLI **0.157.1**, Python **3.12.3**. Helpers require Python 3.11+ and only the standard library.
 
+Model discovery for Orchestra 1.1.0 was also checked with CLI **0.159.2**. That metadata check does not characterize its complete agent runtime. Known family versions are discovered from the current catalog, not a pinned ID list. Native tool schemas, effective settings, capacity and termination semantics still require current evidence.
+
 ## Supported management mode
 
 Orchestra is a **workflow-policy skill**, explicitly approved after a native probe demonstrated that PreToolUse hook errors can allow tool execution to continue. It does not install or depend on a hook for enforcement.

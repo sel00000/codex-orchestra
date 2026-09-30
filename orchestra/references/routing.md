@@ -14,21 +14,26 @@ The leader makes the decision; the helper checks its constraints. Do not ask the
 
 Missing CAD tools, unavailable research sources or absent measurements are not solved by choosing a larger model. First obtain the required input/tool within the authorized scope, or bound the deliverable honestly.
 
-## Candidate models
+## Discover candidates at execution time
 
-Use the intersection of this list, the live catalog, and the current spawn tool's accepted overrides. No implicit fallback to an unlisted model. If the preferred candidate is unavailable, pick another supported candidate and record why; if none fits, report the limitation.
+Model IDs are not an allowlist in the skill. `codex debug models` requests a refreshed catalog from Codex; the helper uses that response as availability metadata and intersects it with the current spawn tool's accepted overrides. Service availability can still differ from catalog metadata. A failed catalog read clears availability for new assignments rather than reusing a stored list.
 
-| Candidate | Starting use, based on the user's model descriptions |
+| Family | Starting use |
 |---|---|
-| `gpt-6-luna` | Bounded extraction, inventory, routine changes |
-| `gpt-6-sol` | General implementation, debugging, connected analysis |
-| `gpt-6-astra` | Consequential design, difficult synthesis or independent review |
-| `gpt-5.6-luna` | Older lightweight alternative when available/suitable |
-| `gpt-5.6-sol` | Older coding alternative when available/suitable |
-| `gpt-5.6-terra` | Older straightforward-work alternative |
-| `gpt-5.5` | Legacy alternative; do not use Max unless the approved policy is explicitly changed |
+| Luna | Bounded extraction, inventory, routine changes |
+| Sol | General implementation, debugging, connected analysis |
+| Astra | Consequential design, difficult synthesis or independent review |
+| Terra | Balanced alternative for straightforward work |
+| Legacy | Older fallback when available and appropriate |
+| Unclassified | Read the current model description and explain the task fit; do not invent a role or performance ranking |
 
-The approved effort range is Low, Medium, High, Extra high (`xhigh`), Max. The seven-model policy excludes Ultra even when the catalog lists it. The observed GPT-5.5 catalog supports only through `xhigh`.
+Within a known family, candidates are ordered by numeric generation, for example `gpt-6.1-sol` before `gpt-6-sol`. Prefer the current generation when it fits the task; the ordering is not a cost or accuracy benchmark. Future versions and new families do not require another hardcoded-name patch. Select only a candidate in the filtered `catalog`, with a concrete rationale.
+
+Hidden/deprecated models and those absent from the current response are excluded. If `upgrade.retirement_at` has passed, exclude the model even if a cached response still lists it. Upcoming retirement and the named replacement remain metadata for the leader. An invalid retirement date excludes that entry pending clarification. Do not change the chosen leader automatically.
+
+The approved effort range remains Low, Medium, High, Extra high (`xhigh`), Max. Ultra and unfamiliar effort names are excluded even when the catalog lists them. A model only receives an effort supported by both its metadata and the native tool, at or below the leader ceiling.
+
+Live runs retain `catalog_id` as a consistency token. Changed model/effort availability invalidates prepared requests. This token is not proof of a live service or authentication of the catalog.
 
 ## Select effort independently of model
 

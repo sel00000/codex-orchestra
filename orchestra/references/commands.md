@@ -10,7 +10,9 @@ python3 "$ORCHESTRA_SKILL/scripts/orchestra.py" inspect --input inspect.json
 python3 "$ORCHESTRA_SKILL/scripts/orchestra.py" init --db .orchestra/example/state.sqlite3 --input init.json
 ```
 
-`inspect.json`: `{"project":"/absolute/project/path"}`. `init.json`, with values actually confirmed for this run:
+`inspect.json`: `{"project":"/absolute/project/path","native_catalog":{"gpt-6.1-sol":["low","medium","high"],"gpt-6-luna":["low","medium","high"]}}`. Replace this example with the models/efforts in the current native tool schema. Without `native_catalog`, inspection only discovers catalog entries and reports `native_schema_checked=false`. `check_updates=false` skips the optional network request for an offline diagnostic.
+
+`init.json`, with values actually confirmed for this run:
 
 ```json
 {
@@ -18,6 +20,10 @@ python3 "$ORCHESTRA_SKILL/scripts/orchestra.py" init --db .orchestra/example/sta
   "goal": "The user's concrete goal",
   "project": "/absolute/project/path",
   "max_agents": 5,
+  "native_catalog": {
+    "gpt-6.1-sol": ["low", "medium", "high"],
+    "gpt-6-luna": ["low", "medium", "high"]
+  },
   "snapshot": {
     "session_id": "current-native-session-id-or-explicitly-labelled-local-id",
     "model": "gpt-6-sol",
@@ -31,13 +37,16 @@ python3 "$ORCHESTRA_SKILL/scripts/orchestra.py" init --db .orchestra/example/sta
 }
 ```
 
-Replace examples with facts; do not manufacture confirmations. `init` generates `selection_id` if omitted and reads the local catalog if `catalog` is omitted. If the current tool accepts fewer models, supply the filtered catalog as `{"model-id":["low","medium"]}`. Keep the returned run/selection IDs for subsequent requests.
+Replace examples with facts; do not manufacture confirmations. `init` generates `selection_id` if omitted, refreshes the Codex catalog, and intersects it with `native_catalog`. It returns `catalog_id` and the filtered candidates. Keep those IDs for subsequent requests. Supplying `catalog` directly remains available for offline fixtures and explicitly evidenced snapshots, but does not enable automatic refresh; use `sync-models` with current `native_catalog` to enable it.
+
+Normal `inspect` also reports `skill_update` using the installed `release.json` and the upstream release number. `update_available` is an update notification; `unverified` is a failed/unavailable check. The helper never installs remote code. Model discovery uses Codex; the optional release check uses a four-second read-only request to the repository.
 
 Each subsequent command uses the same `--db` and a JSON file with `run_id`. Default `actor` is `leader`; any other actor is rejected as workflow misuse. This flag does not authenticate a hostile caller.
 
 | Command | Other fields | Effect |
 |---|---|---|
 | `plan` | `tasks` | Record validated dependency graph/contracts |
+| `sync-models` | optional `native_catalog` if already recorded | Refresh model/effort availability and retirement metadata |
 | `check` | `request` | Validate selection, model and effort without reservation |
 | `reserve` | `request` | Atomically validate plan/dependencies/paths/cap and claim one slot |
 | `bind` | `reservation_id`, `agent_id`, `actual` | Record creation result; mismatch blocks new assignments |
@@ -62,6 +71,7 @@ A `request` uses exactly the task's `depends_on`, `write_paths` and `acceptance`
   "model":"gpt-6-luna",
   "effort":"low",
   "selection_id":"the-id-returned-by-init",
+  "catalog_id":"the-id-returned-by-init-or-sync-models",
   "depends_on":[],
   "write_paths":[],
   "acceptance":"Return a source-backed file inventory",
@@ -71,6 +81,8 @@ A `request` uses exactly the task's `depends_on`, `write_paths` and `acceptance`
 ```
 
 Replace the illustrative timestamp with a realistic task deadline. Expired requests fail. `reserve` returns `action=spawn` exactly once for a stored attempt. Duplicate requests return `wait_existing`; changed payloads under the same attempt are rejected. Never spawn again from a duplicate response.
+
+For a live catalog run, `check` and a new `reserve` refresh models automatically. A changed `catalog_id` returns `CATALOG_STALE`; choose/recheck a request using the new ID. Existing reservations remain reconcilable even if their model has since disappeared. The refresh preserves leader selection, attempts, results and occupied slots. A failed catalog read leaves no candidates for a new dispatch. To reflect a changed native tool schema, include its new `native_catalog` in `check`, `reserve` or `sync-models`.
 
 After the one native call, `bind.actual` can be:
 

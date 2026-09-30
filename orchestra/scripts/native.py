@@ -15,11 +15,7 @@ import shutil
 import subprocess
 from typing import Any
 
-EFFORTS = ("low", "medium", "high", "xhigh", "max")
-MODELS = (
-    "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol",
-    "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5",
-)
+from catalog import EFFORTS, build_catalog, model_name
 CHECKS = (
     "active_selection", "pre_dispatch_guard", "effective_values", "native_cap",
     "root_only_dispatch", "lifecycle", "config_isolation",
@@ -83,7 +79,7 @@ def is_compatible(report: dict) -> bool:
     if not isinstance(snap, dict) or validate_snapshot(snap, snap.get("session_id"), snap.get("turn_id")):
         return False
     catalog = report.get("catalog")
-    if not isinstance(catalog, dict) or snap["model"] not in MODELS:
+    if not isinstance(catalog, dict) or not model_name(snap["model"]):
         return False
     supported = catalog.get(snap["model"])
     if not isinstance(supported, list) or snap["effort"] not in supported:
@@ -167,17 +163,8 @@ def inspect_environment(project: Path, session_id: str | None = None) -> dict:
         result = subprocess.run([executable, "debug", "models"], cwd=directory,
                                 capture_output=True, text=True, check=True, timeout=25)
         data = json.loads(result.stdout)
-        if not isinstance(data, dict) or not isinstance(data.get("models"), list):
-            raise ValueError("Unexpected catalog envelope")
-        for model in data["models"]:
-            if not isinstance(model, dict) or model.get("slug") not in MODELS:
-                continue
-            levels = model.get("supported_reasoning_levels", [])
-            if not isinstance(levels, list):
-                continue
-            available = {level.get("effort") for level in levels
-                         if isinstance(level, dict) and isinstance(level.get("effort"), str)}
-            report["catalog"][model["slug"]] = [effort for effort in EFFORTS if effort in available]
+        report.update(build_catalog(data))
+        report["catalog_source"] = "codex_debug_models"
     except (OSError, subprocess.SubprocessError, ValueError) as error:
         report["diagnostics"].append("CATALOG_READ_FAILED:" + type(error).__name__)
     report["diagnostics"].append("LIVE_PARENT_EFFORT_AND_TURN_NOT_VERIFIED")

@@ -7,10 +7,36 @@ import sys
 import uuid
 
 from native import inspect_environment, is_compatible
+from catalog import catalog_id, intersect_catalog
 from policy import validate_dispatch
 from state import RunStore
+from update_check import check_update
 
-COMMANDS = ("inspect", "init", "plan", "check", "reserve", "bind", "update", "cleanup-plan", "report")
+COMMANDS = ("inspect", "init", "plan", "sync-models", "check", "reserve", "bind", "update", "cleanup-plan", "report")
+
+
+def catalog_details(report, native_catalog):
+    catalog = intersect_catalog(report.get("catalog", {}), native_catalog)
+    excluded = report.get("excluded_models", []) + [{"model": name, "reason": "native_schema_unsupported"}
+                                                  for name in report.get("catalog", {}) if name not in catalog]
+    return catalog, {"catalog_id": catalog_id(catalog), "catalog_source": "codex_debug_models",
+                     "native_catalog": native_catalog, "catalog_observed_at": report.get("catalog_observed_at"),
+                     "model_metadata": {name: details for name, details in report.get("model_metadata", {}).items() if name in catalog},
+                     "routing_candidates": {family: [name for name in names if name in catalog]
+                                            for family, names in report.get("routing_candidates", {}).items()},
+                     "excluded_models": excluded,
+                     "catalog_diagnostics": report.get("diagnostics", [])}
+
+
+def sync_models(store, run_id, native_catalog=None):
+    run = store.summary(run_id)["run"]
+    native_catalog = native_catalog if native_catalog is not None else run.get("native_catalog")
+    if native_catalog is None:
+        raise ValueError("NATIVE_CATALOG_REQUIRED")
+    report = inspect_environment(Path(run["project"]))
+    catalog, details = catalog_details(report, native_catalog)
+    store.update_catalog(run_id, catalog, details)
+    return {"ok": bool(catalog), "catalog": catalog, **details}
 
 
 def owned_reservation(store, run_id, reservation_id):
@@ -28,6 +54,12 @@ def process_command(command, payload, store=None):
         raise ValueError("LEADER_ONLY")
     if command == "inspect":
         report = inspect_environment(Path(payload.get("project", ".")))
+        if "native_catalog" in payload:
+            report["catalog"], details = catalog_details(report, payload["native_catalog"])
+            report.update(details)
+        report["native_schema_checked"] = "native_catalog" in payload
+        if payload.get("check_updates", True):
+            report["skill_update"] = check_update()
         report["strict_enforcement_compatible"] = is_compatible(report)
         report["mode"] = "workflow_policy"
         report["workflow_prerequisites"] = "Confirmed leader selection, available native tools/models, and sufficient native capacity are still required."
@@ -38,28 +70,43 @@ def process_command(command, payload, store=None):
         value = dict(payload)
         value.pop("actor", None)
         value.setdefault("run_id", uuid.uuid4().hex)
-        value.setdefault("policy_version", "workflow-1")
+        value.setdefault("policy_version", "workflow-2")
         value["snapshot"] = dict(value.get("snapshot", {}))
         value["snapshot"].setdefault("selection_id", uuid.uuid4().hex)
-        if not value.get("catalog"):
-            value["catalog"] = inspect_environment(Path(value["project"]))["catalog"]
+        if "native_catalog" in value:
+            report = inspect_environment(Path(value["project"]))
+            value["catalog"], details = catalog_details(report, value["native_catalog"])
+            value.update(details)
+        elif not value.get("catalog"):
+            raise ValueError("NATIVE_CATALOG_REQUIRED")
         store.create_run(value)
-        return {"ok": True, "run_id": value["run_id"], "selection_id": value["snapshot"]["selection_id"]}
+        return {"ok": True, "run_id": value["run_id"], "selection_id": value["snapshot"]["selection_id"],
+                "catalog_id": value.get("catalog_id"), "catalog": value["catalog"]}
     run_id = payload["run_id"]
+    if command == "sync-models":
+        return sync_models(store, run_id, payload.get("native_catalog"))
     if command == "plan":
         store.put_tasks(run_id, payload["tasks"])
         return {"ok": True, "tasks": store.summary(run_id)["tasks"]}
     if command == "check":
         summary = store.summary(run_id)
+        if summary["run"].get("catalog_source") == "codex_debug_models":
+            sync_models(store, run_id, payload.get("native_catalog"))
+            summary = store.summary(run_id)
         request = payload["request"]
-        errors = validate_dispatch(request, summary["run"]["snapshot"], summary["run"]["catalog"])
+        errors = validate_dispatch(request, summary["run"]["snapshot"], summary["run"]["catalog"], summary["run"].get("catalog_id"))
         if isinstance(request, dict) and request.get("run_id") != run_id:
             errors.append("REQUEST_ID_MISMATCH")
         if summary["problem"]:
             errors.append(summary["problem"])
-        return {"ok": not errors, "errors": errors, "note": "A successful reserve is also required before native dispatch."}
+        return {"ok": not errors, "errors": errors, "catalog_id": summary["run"].get("catalog_id"),
+                "catalog": summary["run"]["catalog"], "note": "A successful reserve is also required before native dispatch."}
     if command == "reserve":
         request = payload["request"]
+        summary = store.summary(run_id)
+        existing = any(row["task_id"] == request["task_id"] and row["attempt"] == request["attempt"] for row in summary["agents"])
+        if summary["run"].get("catalog_source") == "codex_debug_models" and not existing:
+            sync_models(store, run_id, payload.get("native_catalog"))
         return {"ok": True, **store.reserve(run_id, request["task_id"], request["attempt"], request)}
     if command == "bind":
         owned_reservation(store, run_id, payload["reservation_id"])
@@ -103,6 +150,8 @@ def write_report(store, run_id, target):
              f"- 선택 근거: {snapshot['selection_source']} — {snapshot['selection_evidence']}",
              "- 관리 방식: 스킬의 배정 규칙과 로컬 검사. Codex 내부 오류까지 강제 차단하는 기능은 아님.", "",
              "## 작업 결과", ""]
+    if run.get("catalog_id"):
+        lines[8:8] = [f"- 모델 목록 확인: {run.get('catalog_observed_at')} ({run['catalog_id']})"]
     for task in report["tasks"]:
         lines += [f"### {task['task_id']} — {task['state']}", "",
                   "```json", json.dumps(task.get("result"), ensure_ascii=False, indent=2), "```", ""]

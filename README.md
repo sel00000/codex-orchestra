@@ -38,11 +38,19 @@ The leader keeps the model and reasoning effort you selected. It chooses setting
 
 For example, a Sol / High leader can combine a Luna / Low worker, a Sol / Medium implementer, and an Astra / High advisor. With an Astra / Low leader, every child task must also use Low.
 
-The models in the table are candidates for assignment. Availability depends on your account and Codex environment. Orchestra uses only combinations allowed by both the current model catalog and the actual agent creation tool. See the [model selection policy](orchestra/references/routing.md) for details.
+The models in the table are candidates for assignment. Availability depends on your account and Codex environment. Orchestra refreshes Codex's catalog and uses only combinations allowed by both that catalog and the actual agent creation tool. See the [model selection policy](orchestra/references/routing.md) for details.
+
+## Model changes and skill updates
+
+Orchestra 1.1.0 follows model changes without a fixed list of model IDs. New versions such as `gpt-6.1-sol` become candidates when both Codex and the native tool support them. Within a known family, newer generations appear first; the leader still chooses according to the task.
+
+Before new assignments, the helper checks the catalog again. It excludes models that disappear, become hidden or deprecated, or reach their published retirement time. Supported reasoning efforts come from the model metadata and the tool schema. The leader's chosen model and effort ceiling stay under your control.
+
+Each skill invocation also checks the repository's release number. If a newer skill version is available, Orchestra reports the installed and latest versions. This is a notification on invocation; it does not install code or run a background watcher. An unavailable update check is recorded as `unverified`.
 
 ## Installation
 
-Use Ubuntu WSL with Python 3.11 or later. Codex's agent creation tool must support setting the model and reasoning effort for each child agent. Initial validation used Codex CLI 0.157.1 / Python 3.12.3. For other versions or tool environments, check the [compatibility guide](orchestra/references/native-compatibility.md) first.
+Use Ubuntu WSL with Python 3.11 or later. Codex's agent creation tool must support setting the model and reasoning effort for each child agent. Model discovery for this release was checked with Codex CLI 0.159.2 / Python 3.12.3; the initial native task trial used CLI 0.157.1. For other versions or tool environments, check the [compatibility guide](orchestra/references/native-compatibility.md) first.
 
 Run these commands in your WSL terminal:
 
@@ -60,7 +68,7 @@ To create a ZIP without installing:
 python3 tools/install_orchestra.py --zip dist/orchestra.zip
 ```
 
-The ZIP contains only the skill's 10 files. Tests, local run databases, and caches are excluded.
+The ZIP contains only the skill's 13 files. Tests, local run databases, and caches are excluded.
 
 ## Usage examples
 
@@ -74,7 +82,7 @@ If the requested team limit exceeds the current session's actual agent capacity,
 
 ## Validation and current limitations
 
-The **58 local tests** covering policy, state, commands, and packaging passed. The installed skill also created two native child tasks whose code fix and source review results were checked.
+The **81 local tests** covering model discovery and retirement, update notifications, policy, state, commands, and packaging passed. The earlier installed-skill trial created two native child tasks whose code fix and source review results were checked. This release's model sync was checked against the actual CLI catalog; the native task trial was not repeated for this update.
 
 - **Actual concurrent runs with 5 or 20 agents have not been verified.** Local reservation boundary tests for 5/20 slots are separate from tests of real agents running at the same time.
 - If the creation tool does not expose the final effective model and reasoning effort, the actual values remain `unverified`.
